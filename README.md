@@ -1,6 +1,6 @@
 # Legal Intake Middleware
 
-This middleware acts as a "Universal Translator" between verified intake data and various legal destinations (LegalServer, Markdown, CSV).
+Specific middleware for retrieving information from a source and putting it into LegalServer, a document, or other form.
 
 ## Architecture
 - **Clean Pipeline:** Consumes verified JSON, handles logic/mapping/search.
