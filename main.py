@@ -5,7 +5,12 @@ import httpx
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from models import IntakeRecord
-from mapping_logic import transform_data
+from mapping_logic import (
+    transform_data,
+    get_ls_search_params,
+    build_ls_note_subject,
+    build_ls_note_body,
+)
 
 app = FastAPI(title="Legal Intake Bridge")
 
@@ -16,22 +21,83 @@ def load_config():
 # --- Export Engine Functions ---
 
 async def export_to_legalserver(payload: dict, config: dict):
-    transformed = transform_data(payload, "LegalServer", config["fields"])
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(
-                config["endpoint"],
-                json=transformed,
-                headers={"Authorization": "Bearer mock-token-123"}
+    data = payload.get("data", payload)
+    base_url = config["base_url"].rstrip("/")
+    token = config["api_token"]
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    search_params = get_ls_search_params(data)
+    if not search_params.get("first") and not search_params.get("last"):
+        raise HTTPException(
+            status_code=422,
+            detail="Insufficient data to search LegalServer: need at least a client name"
+        )
+    search_params["results"] = "full"
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Step 1: Search for the matter
+        search_resp = await client.get(
+            f"{base_url}/api/v2/matters",
+            params=search_params,
+            headers=headers,
+        )
+        search_resp.raise_for_status()
+        search_result = search_resp.json()
+
+        total = search_result.get("total_records", 0)
+        authorized = search_result.get("authorized_records", total)
+
+        if total == 0:
+            raise HTTPException(status_code=404, detail="No matching matter found in LegalServer")
+        if authorized < total:
+            raise HTTPException(
+                status_code=403,
+                detail=f"LegalServer found {total} match(es) but API user can only see {authorized} — check permissions"
             )
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            print(f"LegalServer Export Failed: {e}")
-            raise
+        if total > 1:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ambiguous: {total} matters match the search criteria — narrow the query"
+            )
+
+        matter = search_result["data"][0]
+        disposition = (matter.get("case_disposition") or {}).get("lookup_value", "")
+        if disposition and disposition not in ("Open", "Pending", "Incomplete Intake"):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Matter disposition is '{disposition}' — will not write to a non-open case"
+            )
+
+        matter_uuid = matter["matter_uuid"]
+
+        # Step 2: Create the note
+        note_payload = {
+            "module": "matter",
+            "module_id": matter_uuid,
+            "subject": build_ls_note_subject(data),
+            "body": build_ls_note_body(data),
+            "is_html": True,
+        }
+        note_resp = await client.post(
+            f"{base_url}/api/v2/notes",
+            json=note_payload,
+            headers=headers,
+        )
+        note_resp.raise_for_status()
+        note_result = note_resp.json()
+
+        return {
+            "matter_uuid": matter_uuid,
+            "note_uuid": note_result.get("note_uuid"),
+            "legalserver_uuid": matter_uuid,
+        }
+
 
 def export_to_markdown(payload: dict, config: dict):
-    transformed = transform_data(payload, "Markdown_Report", config["fields"])
+    transformed = transform_data(payload, "Markdown_Report", config.get("fields", []))
     record_id = payload.get("id") or "unknown"
     filename = f"exports/report_{record_id}.md"
     os.makedirs("exports", exist_ok=True)
@@ -40,14 +106,15 @@ def export_to_markdown(payload: dict, config: dict):
         for key, value in transformed.items():
             f.write(f"**{key}**: {value}  \n")
     return {
-        "status": "success", 
-        "message": "printed", 
-        "file": filename, 
+        "status": "success",
+        "message": "printed",
+        "file": filename,
         "action": "markdown"
     }
 
+
 def export_to_csv(payload: dict, config: dict):
-    transformed = transform_data(payload, "CSV_Export", config["fields"])
+    transformed = transform_data(payload, "CSV_Export", config.get("fields", []))
     filename = "master_intake.csv"
     file_exists = os.path.isfile(filename)
     with open(filename, "a", newline="") as f:
@@ -56,11 +123,12 @@ def export_to_csv(payload: dict, config: dict):
             writer.writeheader()
         writer.writerow(transformed)
     return {
-        "status": "success", 
-        "message": f"saved to {filename} (stubbed)", 
-        "file": filename, 
+        "status": "success",
+        "message": f"saved to {filename}",
+        "file": filename,
         "action": "csv"
     }
+
 
 # --- API Endpoints ---
 
@@ -69,29 +137,29 @@ async def trigger_export(record: IntakeRecord):
     config = load_config()
     payload = record.model_dump()
     action = payload.get("action")
-    
+
     if action == "all":
         results = {}
         for dest, dest_config in config["destinations"].items():
             if dest_config["active"]:
                 results[dest] = await run_single_export(payload, dest, dest_config)
         return results
-    
-    # Map friendly actions to destination names
+
     action_map = {
         "add_note": "LegalServer",
         "LegalServer": "LegalServer",
         "print": "Markdown_Report",
         "csv": "CSV_Export"
     }
-    
+
     destination = action_map.get(action, action)
     dest_config = config["destinations"].get(destination)
-    
+
     if not dest_config or not dest_config["active"]:
         raise HTTPException(status_code=400, detail=f"Invalid or inactive action/destination: {action}")
-    
+
     return await run_single_export(payload, destination, dest_config)
+
 
 async def run_single_export(payload, destination, config):
     if destination == "LegalServer":
@@ -103,17 +171,12 @@ async def run_single_export(payload, destination, config):
     else:
         raise HTTPException(status_code=400, detail="Export logic not implemented")
 
-    # UUID Normalization Logic:
-    # 1. If destination is LegalServer, we map its ID to legalserver_uuid.
-    if destination == "LegalServer":
-        ls_id = res.get("legalserver_id") or res.get("id")
-        if ls_id:
-            res["legalserver_uuid"] = ls_id
-    # 2. Or, if ANY downstream returns legalserver_id explicitly, we honor it.
-    elif isinstance(res, dict) and "legalserver_id" in res:
+    # If any destination explicitly returns legalserver_id, normalize it
+    if isinstance(res, dict) and "legalserver_id" in res and "legalserver_uuid" not in res:
         res["legalserver_uuid"] = res["legalserver_id"]
-        
+
     return res
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -2,16 +2,16 @@
   "destinations": {
     "LegalServer": {
       "active": true,
-      "endpoint": "http://localhost:8081/api/v2/matters",
-      "fields": ["first_name", "last_name", "date_of_birth", "a_number", "case_summary"]
+      "base_url": "https://your-site.legalserver.org",
+      "api_token": "your-api-token-here"
     },
     "Markdown_Report": {
       "active": true,
-      "fields": ["full_name", "date_of_birth", "a_number", "case_summary", "intake_date"]
+      "fields": ["full_legal_name", "date_of_birth", "a_number", "personal_history", "interview_date"]
     },
     "CSV_Export": {
       "active": true,
-      "fields": ["full_name", "date_of_birth", "a_number", "intake_date", "phone_number"]
+      "fields": ["full_legal_name", "date_of_birth", "a_number", "interview_date", "phone_primary"]
     }
   }
 }
