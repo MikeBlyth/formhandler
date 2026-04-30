@@ -1,4 +1,5 @@
 import os
+import html
 
 # --- Markdown / CSV field mappings ---
 
@@ -109,9 +110,9 @@ def build_ls_note_body(data: dict) -> str:
     if personal_history or fear_factors:
         parts.append("<br>\n<h3>Case Narrative</h3>\n")
         if personal_history:
-            parts.append(f"<b>Personal History:</b><br>\n<p>{personal_history}</p>\n")
+            parts.append(f"<b>Personal History:</b><br>\n<p>{html.escape(str(personal_history))}</p>\n")
         if fear_factors:
-            parts.append(f"<b>Fear Factors:</b><br>\n<p>{fear_factors}</p>\n")
+            parts.append(f"<b>Fear Factors:</b><br>\n<p>{html.escape(str(fear_factors))}</p>\n")
 
     hearings = data.get("hearings")
     if isinstance(hearings, list) and hearings:
@@ -120,10 +121,10 @@ def build_ls_note_body(data: dict) -> str:
         parts.append("<tr><th>Date</th><th>Location</th><th>Type</th><th>Outcome Notes</th></tr>\n")
         for h in hearings:
             if isinstance(h, dict):
-                date = _fmt_smart_date(h.get("hearing_date"))
-                location = h.get("location") or ""
-                htype = h.get("hearing_type") or ""
-                outcome = h.get("outcome_notes") or ""
+                date = html.escape(_fmt_smart_date(h.get("hearing_date")))
+                location = html.escape(str(h.get("location") or ""))
+                htype = html.escape(str(h.get("hearing_type") or ""))
+                outcome = html.escape(str(h.get("outcome_notes") or ""))
                 parts.append(f"<tr><td>{date}</td><td>{location}</td><td>{htype}</td><td>{outcome}</td></tr>\n")
         parts.append("</table>\n")
 
@@ -150,13 +151,13 @@ def build_ls_note_body(data: dict) -> str:
         parts.append("<br>\n<h3>Documents</h3>\n<ul>\n")
         for doc in docs:
             if doc:
-                parts.append(f"<li>{doc}</li>\n")
+                parts.append(f"<li>{html.escape(str(doc))}</li>\n")
         parts.append("</ul>\n")
 
     other = data.get("other")
     if other:
         parts.append("<br>\n<h3>Other Notes</h3>\n")
-        parts.append(f"<p>{other}</p>\n")
+        parts.append(f"<p>{html.escape(str(other))}</p>\n")
 
     return "".join(p for p in parts if p)
 
@@ -207,4 +208,4 @@ def _fmt_list(val) -> str:
 def _row(label: str, val) -> str:
     if val is None or val == "" or val == [] or val == {}:
         return ""
-    return f"<b>{label}:</b> {val}<br>\n"
+    return f"<b>{label}:</b> {html.escape(str(val))}<br>\n"
