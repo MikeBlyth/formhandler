@@ -1,6 +1,6 @@
-# Legal Intake Middleware (Handler)
+# Legal Intake Bridge
 
-A stateless middleware designed to receive JSON intake data and route it to various destinations (LegalServer, CSV, Markdown, etc.). 
+A stateless bridge designed to receive JSON intake data and route it to various destinations (LegalServer, CSV, Markdown, etc.). 
 
 ## Architecture
 - **Stateless Bridge:** Acts as a "push" model receiver. It does not store or search for data.
@@ -26,7 +26,7 @@ A stateless middleware designed to receive JSON intake data and route it to vari
    ```
    *Runs on http://localhost:8081*
 
-3. **Start Middleware:**
+3. **Start Bridge:**
    ```bash
    python main.py
    ```

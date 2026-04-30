@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from models import IntakeRecord
 from mapping_logic import transform_data
 
-app = FastAPI(title="Legal Intake Middleware")
+app = FastAPI(title="Legal Intake Bridge")
 
 def load_config():
     with open("config.json", "r") as f:

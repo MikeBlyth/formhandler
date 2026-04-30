@@ -1,6 +1,6 @@
-# formhandler — Middleware Reference
+# formhandler — Bridge Reference
 
-FastAPI middleware for searching, mapping, and exporting verified intake data.
+FastAPI bridge for mapping and exporting verified intake data.
 
 ## 🚨 Critical Constraints
 - **Data Integrity:** Use Pydantic models in `models.py` for all data transformations.
@@ -14,5 +14,5 @@ FastAPI middleware for searching, mapping, and exporting verified intake data.
   3. Implementing the export function in `main.py`.
 
 ## 🚀 Workflow
-- **Mocking:** Always test exports against `mock_ls_api.py` before targeting real endpoints.
-- **Search:** Supports case-insensitive name matching and exact A# matching.
+- **Mocking:** Always test exports against `mock_ls_api.py`. Ensure the `endpoint` in `config.json` matches the port where the mock API is running (default 8081).
+- **Validation:** All incoming data must conform to the `IntakeRecord` schema in `models.py`.
