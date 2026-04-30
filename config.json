@@ -2,7 +2,7 @@
   "destinations": {
     "LegalServer": {
       "active": true,
-      "endpoint": "http://localhost:8080/api/v2/matters",
+      "endpoint": "http://localhost:8081/api/v2/matters",
       "fields": ["first_name", "last_name", "date_of_birth", "a_number", "case_summary"]
     },
     "Markdown_Report": {

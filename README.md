@@ -24,10 +24,13 @@ A stateless middleware designed to receive JSON intake data and route it to vari
    ```bash
    python mock_ls_api.py
    ```
+   *Runs on http://localhost:8081*
+
 3. **Start Middleware:**
    ```bash
    python main.py
    ```
+   *Runs on http://localhost:8001*
 
 ## Usage
 Send a POST request to `/export/{destination}` with the intake record JSON in the body.
