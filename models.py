@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import date
 
 class IntakeRecord(BaseModel):
-    id: int
+    id: Optional[int] = None
     full_name: str
     first_name: str
     last_name: str
@@ -19,10 +19,3 @@ class LegalServerExport(BaseModel):
     date_of_birth: str
     case_summary_custom_99: str
     a_number_internal: str
-
-class SearchResult(BaseModel):
-    id: int
-    full_name: str
-    date_of_birth: str
-    a_number: str
-    intake_date: str

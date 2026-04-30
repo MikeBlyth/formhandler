@@ -4,58 +4,10 @@ import os
 import httpx
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, BackgroundTasks
-from models import IntakeRecord, SearchResult
+from models import IntakeRecord
 from mapping_logic import transform_data
 
 app = FastAPI(title="Legal Intake Middleware")
-
-# Mock Database: Verified Intake Records
-MOCK_DB = [
-    {
-        "id": 1,
-        "full_name": "John Doe",
-        "first_name": "John",
-        "last_name": "Doe",
-        "date_of_birth": "1985-05-12",
-        "a_number": "123456789",
-        "intake_date": "2024-03-01",
-        "phone_number": "555-0101",
-        "case_summary": "Client seeking asylum due to political persecution."
-    },
-    {
-        "id": 2,
-        "full_name": "Jane Smith",
-        "first_name": "Jane",
-        "last_name": "Smith",
-        "date_of_birth": "1992-11-23",
-        "a_number": "987654321",
-        "intake_date": "2024-03-05",
-        "phone_number": "555-0202",
-        "case_summary": "Family-based petition for spouse."
-    },
-    {
-        "id": 3,
-        "full_name": "Mario Rossi",
-        "first_name": "Mario",
-        "last_name": "Rossi",
-        "date_of_birth": "1978-08-30",
-        "a_number": "112233445",
-        "intake_date": "2024-03-10",
-        "phone_number": "555-0303",
-        "case_summary": "Employment visa renewal."
-    },
-    {
-        "id": 4,
-        "full_name": "Ibrahim Diallo",
-        "first_name": "Ibrahim",
-        "last_name": "Diallo",
-        "date_of_birth": "1995-02-14",
-        "a_number": "998877665",
-        "intake_date": "2024-04-20",
-        "phone_number": "555-0404",
-        "case_summary": "Seeking asylum and work authorization."
-    }
-]
 
 def load_config():
     with open("config.json", "r") as f:
@@ -101,40 +53,24 @@ def export_to_csv(data: dict, config: dict):
 
 # --- API Endpoints ---
 
-@app.get("/search", response_model=List[SearchResult])
-async def search_records(name: Optional[str] = None, a_number: Optional[str] = None):
-    results = []
-    for rec in MOCK_DB:
-        if a_number and a_number == rec["a_number"]:
-            results.append(rec)
-        elif name and name.lower() in rec["full_name"].lower():
-            results.append(rec)
-    
-    if not results and not name and not a_number:
-        return [SearchResult(**rec) for rec in MOCK_DB]
-        
-    return [SearchResult(**rec) for rec in results]
-
-@app.post("/export/{record_id}/{destination}")
-async def trigger_export(record_id: int, destination: str):
+@app.post("/export/{destination}")
+async def trigger_export(destination: str, record: IntakeRecord):
     config = load_config()
-    record = next((rec for rec in MOCK_DB if rec["id"] == record_id), None)
-    
-    if not record:
-        raise HTTPException(status_code=404, detail="Record not found")
+    # Convert Pydantic model to dictionary for the mapping logic
+    record_dict = record.model_dump()
     
     if destination == "all":
         results = {}
         for dest, dest_config in config["destinations"].items():
             if dest_config["active"]:
-                results[dest] = await run_single_export(record, dest, dest_config)
+                results[dest] = await run_single_export(record_dict, dest, dest_config)
         return results
     
     dest_config = config["destinations"].get(destination)
     if not dest_config or not dest_config["active"]:
         raise HTTPException(status_code=400, detail="Invalid or inactive destination")
     
-    return await run_single_export(record, destination, dest_config)
+    return await run_single_export(record_dict, destination, dest_config)
 
 async def run_single_export(record, destination, config):
     if destination == "LegalServer":

@@ -1,17 +1,18 @@
-# Legal Intake Middleware
+# Legal Intake Middleware (Handler)
 
-Specific middleware for retrieving information from a source and putting it into LegalServer, a document, or other form.
+A stateless middleware designed to receive JSON intake data and route it to various destinations (LegalServer, CSV, Markdown, etc.). 
 
 ## Architecture
-- **Clean Pipeline:** Consumes verified JSON, handles logic/mapping/search.
+- **Stateless Bridge:** Acts as a "push" model receiver. It does not store or search for data.
+- **Webhook Style:** Receives data via POST and forwards it after applying mapping logic.
 - **Strategy Pattern:** Export destinations are decoupled; adding new ones doesn't break existing code.
-- **Extensible Mapping:** `config.json` and `mapping_logic.py` handle field renaming without touching core logic.
+- **Extensible Mapping:** `config.json` and `mapping_logic.py` handle field renaming and data transformation.
 
 ## Project Structure
-- `main.py`: Core FastAPI application and Export Engine.
+- `main.py`: Core FastAPI application that handles incoming data and routes it.
 - `models.py`: Pydantic data models for validation.
 - `mapping_logic.py`: Field mapping and transformation logic.
-- `config.json`: Control panel for active fields and destinations.
+- `config.json`: Configuration for active destinations and field requirements.
 - `mock_ls_api.py`: Mock LegalServer v2 API for testing.
 
 ## Getting Started
@@ -27,4 +28,14 @@ Specific middleware for retrieving information from a source and putting it into
    ```bash
    python main.py
    ```
-4. **Interactive Docs:** [http://localhost:8001/docs](http://localhost:8001/docs)
+
+## Usage
+Send a POST request to `/export/{destination}` with the intake record JSON in the body.
+- `destination`: `LegalServer`, `CSV_Export`, `Markdown_Report`, or `all`.
+
+Example:
+```bash
+curl -X POST "http://localhost:8001/export/LegalServer" \
+-H "Content-Type: application/json" \
+-d '{"full_name": "John Doe", ...}'
+```
