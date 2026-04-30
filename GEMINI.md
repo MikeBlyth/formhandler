@@ -6,6 +6,7 @@ FastAPI bridge for mapping and exporting verified intake data.
 - **Data Integrity:** Use Pydantic models in `models.py` for all data transformations.
 - **Decoupling:** Never hard-code field names in `main.py`; always use `mapping_logic.py`.
 - **Destinations:** Toggle visibility and active status in `config.json`.
+- **Secret Management:** `config.json` is tracked by Git. **Do not commit real API tokens.** In production, move sensitive fields (e.g., `api_token`) to environment variables and update `main.py` to prefer them.
 
 ## 🛠 Project Conventions
 - **Centralized Translation:** The bridge consumes the entire `reviewed_data` JSON block from the forms app (sent as the `data` field in `IntakeRecord`). Field names match the legacy `IntakeForm` schema (`full_legal_name`, `date_of_birth`, `phone_primary`, etc.).

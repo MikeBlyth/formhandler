@@ -31,7 +31,16 @@ def _verify_api_key(authorization: Annotated[str | None, Header()] = None) -> No
 
 def load_config():
     with open("config.json", "r") as f:
-        return json.load(f)
+        config = json.load(f)
+    
+    # Environment overrides for production/demo use
+    ls_config = config["destinations"].get("LegalServer", {})
+    if os.environ.get("LS_BASE_URL"):
+        ls_config["base_url"] = os.environ.get("LS_BASE_URL")
+    if os.environ.get("LS_API_TOKEN"):
+        ls_config["api_token"] = os.environ.get("LS_API_TOKEN")
+    
+    return config
 
 # --- Export Engine Functions ---
 
