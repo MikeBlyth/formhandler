@@ -1,9 +1,10 @@
 import json
 import csv
 import os
+import secrets
 import httpx
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from typing import Annotated, List, Optional
+from fastapi import Depends, FastAPI, Header, HTTPException, status, BackgroundTasks
 from models import IntakeRecord
 from mapping_logic import (
     transform_data,
@@ -13,6 +14,20 @@ from mapping_logic import (
 )
 
 app = FastAPI(title="Legal Intake Bridge")
+
+_BRIDGE_API_KEY = os.environ.get("BRIDGE_API_KEY", "")
+
+
+def _verify_api_key(authorization: Annotated[str | None, Header()] = None) -> None:
+    if not _BRIDGE_API_KEY:
+        return  # No key configured — open (dev mode)
+    expected = f"Bearer {_BRIDGE_API_KEY}"
+    if not authorization or not secrets.compare_digest(authorization, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized.",
+        )
+
 
 def load_config():
     with open("config.json", "r") as f:
@@ -133,7 +148,10 @@ def export_to_csv(payload: dict, config: dict):
 # --- API Endpoints ---
 
 @app.post("/export")
-async def trigger_export(record: IntakeRecord):
+async def trigger_export(
+    record: IntakeRecord,
+    _: Annotated[None, Depends(_verify_api_key)] = None,
+):
     config = load_config()
     payload = record.model_dump()
     action = payload.get("action")
