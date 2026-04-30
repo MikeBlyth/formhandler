@@ -15,8 +15,8 @@ def load_config():
 
 # --- Export Engine Functions ---
 
-async def export_to_legalserver(data: dict, config: dict):
-    transformed = transform_data(data, "LegalServer", config["fields"])
+async def export_to_legalserver(payload: dict, config: dict):
+    transformed = transform_data(payload, "LegalServer", config["fields"])
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
@@ -30,18 +30,24 @@ async def export_to_legalserver(data: dict, config: dict):
             print(f"LegalServer Export Failed: {e}")
             raise
 
-def export_to_markdown(data: dict, config: dict):
-    transformed = transform_data(data, "Markdown_Report", config["fields"])
-    filename = f"exports/report_{data['id']}.md"
+def export_to_markdown(payload: dict, config: dict):
+    transformed = transform_data(payload, "Markdown_Report", config["fields"])
+    record_id = payload.get("id") or "unknown"
+    filename = f"exports/report_{record_id}.md"
     os.makedirs("exports", exist_ok=True)
     with open(filename, "w") as f:
         f.write(f"# Case Summary: {transformed.get('Name', 'Unknown')}\n\n")
         for key, value in transformed.items():
             f.write(f"**{key}**: {value}  \n")
-    return {"status": "success", "file": filename}
+    return {
+        "status": "success", 
+        "message": "printed", 
+        "file": filename, 
+        "action": "markdown"
+    }
 
-def export_to_csv(data: dict, config: dict):
-    transformed = transform_data(data, "CSV_Export", config["fields"])
+def export_to_csv(payload: dict, config: dict):
+    transformed = transform_data(payload, "CSV_Export", config["fields"])
     filename = "master_intake.csv"
     file_exists = os.path.isfile(filename)
     with open(filename, "a", newline="") as f:
@@ -49,38 +55,65 @@ def export_to_csv(data: dict, config: dict):
         if not file_exists:
             writer.writeheader()
         writer.writerow(transformed)
-    return {"status": "success", "file": filename}
+    return {
+        "status": "success", 
+        "message": f"saved to {filename} (stubbed)", 
+        "file": filename, 
+        "action": "csv"
+    }
 
 # --- API Endpoints ---
 
-@app.post("/export/{destination}")
-async def trigger_export(destination: str, record: IntakeRecord):
+@app.post("/export")
+async def trigger_export(record: IntakeRecord):
     config = load_config()
-    # Convert Pydantic model to dictionary for the mapping logic
-    record_dict = record.model_dump()
+    payload = record.model_dump()
+    action = payload.get("action")
     
-    if destination == "all":
+    if action == "all":
         results = {}
         for dest, dest_config in config["destinations"].items():
             if dest_config["active"]:
-                results[dest] = await run_single_export(record_dict, dest, dest_config)
+                results[dest] = await run_single_export(payload, dest, dest_config)
         return results
     
-    dest_config = config["destinations"].get(destination)
-    if not dest_config or not dest_config["active"]:
-        raise HTTPException(status_code=400, detail="Invalid or inactive destination")
+    # Map friendly actions to destination names
+    action_map = {
+        "add_note": "LegalServer",
+        "LegalServer": "LegalServer",
+        "print": "Markdown_Report",
+        "csv": "CSV_Export"
+    }
     
-    return await run_single_export(record_dict, destination, dest_config)
+    destination = action_map.get(action, action)
+    dest_config = config["destinations"].get(destination)
+    
+    if not dest_config or not dest_config["active"]:
+        raise HTTPException(status_code=400, detail=f"Invalid or inactive action/destination: {action}")
+    
+    return await run_single_export(payload, destination, dest_config)
 
-async def run_single_export(record, destination, config):
+async def run_single_export(payload, destination, config):
     if destination == "LegalServer":
-        return await export_to_legalserver(record, config)
+        res = await export_to_legalserver(payload, config)
     elif destination == "Markdown_Report":
-        return export_to_markdown(record, config)
+        res = export_to_markdown(payload, config)
     elif destination == "CSV_Export":
-        return export_to_csv(record, config)
+        res = export_to_csv(payload, config)
     else:
         raise HTTPException(status_code=400, detail="Export logic not implemented")
+
+    # UUID Normalization Logic:
+    # 1. If destination is LegalServer, we map its ID to legalserver_uuid.
+    if destination == "LegalServer":
+        ls_id = res.get("legalserver_id") or res.get("id")
+        if ls_id:
+            res["legalserver_uuid"] = ls_id
+    # 2. Or, if ANY downstream returns legalserver_id explicitly, we honor it.
+    elif isinstance(res, dict) and "legalserver_id" in res:
+        res["legalserver_uuid"] = res["legalserver_id"]
+        
+    return res
 
 if __name__ == "__main__":
     import uvicorn

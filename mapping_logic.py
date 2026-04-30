@@ -27,14 +27,18 @@ MAPPING_CONFIG = {
 
 def transform_data(data: dict, destination: str, active_fields: list):
     """
-    Universal Translator: Maps internal field names to destination-specific keys
-    based on the mapping config and active fields toggle.
+    Universal Translator: Maps internal field names to destination-specific keys.
+    'data' should be the nested dictionary containing the form fields.
     """
     mapping = MAPPING_CONFIG.get(destination, {})
     transformed = {}
     
-    for internal_key, value in data.items():
-        if internal_key in active_fields:
+    # Work with the nested 'data' if provided, otherwise the root dict
+    source_data = data.get("data", data)
+    
+    for internal_key, value in source_data.items():
+        # If active_fields is empty or contains the key, we process it
+        if not active_fields or internal_key in active_fields:
             dest_key = mapping.get(internal_key, internal_key)
             transformed[dest_key] = value
             
